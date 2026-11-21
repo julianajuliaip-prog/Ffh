@@ -1,0 +1,82 @@
+-- ffh4x
+-- Target: Roblox (Duelos em Câmara)
+-- Features: FOV 500, Head Aim, Toggle (Right Shift)
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local Camera = Workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
+
+local Config = {
+    Enabled = true,
+    FOV = 500,
+    Target = "Head",
+    TeamCheck = false,
+    Smoothness = 1.5 -- 1 = instant, higher = smoother/slower
+}
+
+-- FOV Visualizer
+local fovCircle = Drawing.new("Circle")
+fovCircle.Visible = true
+fovCircle.Radius = Config.FOV
+fovCircle.Thickness = 1
+fovCircle.Color = Color3.fromRGB(0, 255, 0)
+fovCircle.Filled = false
+
+local function getTarget()
+    local closestPart = nil
+    local shortestDist = Config.FOV
+    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local char = player.Character
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            local part = char:FindFirstChild(Config.Target)
+            
+            if hum and hum.Health > 0 and part then
+                if Config.TeamCheck and LocalPlayer.Team and player.Team == LocalPlayer.Team then
+                    continue
+                end
+
+                local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+                if onScreen then
+                    local dist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
+                    if dist < shortestDist then
+                        shortestDist = dist
+                        closestPart = part
+                    end
+                end
+            end
+        end
+    end
+    return closestPart
+end
+
+RunService.RenderStepped:Connect(function()
+    fovCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    fovCircle.Radius = Config.FOV
+    
+    if not Config.Enabled then return end
+
+    local targetPart = getTarget()
+    if targetPart then
+        local targetPos = targetPart.Position
+        local currentCFrame = Camera.CFrame
+        local newCFrame = CFrame.new(currentCFrame.Position, targetPos)
+        
+        -- Locks camera to head position
+        Camera.CFrame = currentCFrame:Lerp(newCFrame, 1 / Config.Smoothness)
+    end
+end)
+
+-- Toggle keybind (Right Shift)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.RightShift then
+        Config.Enabled = not Config.Enabled
+        fovCircle.Color = Config.Enabled and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+    end
+end)
